@@ -1,0 +1,31 @@
+# Runtime dependencies — Google Colab / Linux + CUDA (the execution environment)
+# Versions are floors, not hard pins: Colab preinstalls most of these, and hard
+# pins force a slow reinstall plus a runtime restart. Verified-working versions
+# from the Colab session of 2026-09 are noted per line.
+#
+# For local macOS x86_64 development, use requirements-local.txt instead.
+
+# --- Model + hidden-state extraction (Phase 8) ---
+torch>=2.5                # verified 2.11.0+cu
+transformers>=4.50        # verified 5.16.1 ; >=4.50 required for Gemma 3
+huggingface_hub>=0.26     # gated access: Gemma weights, AfriHate, ToxiGen
+accelerate>=1.0           # device placement / low-memory loading
+sentencepiece>=0.2        # Gemma tokenizer
+safetensors>=0.4          # checkpoint format
+
+# --- Dataset acquisition (Phase 2-3) ---
+datasets>=3.0             # verified 4.0.0 ; AfriHate + ToxiGen are Hub-hosted
+
+# --- Data handling + modelling (Phases 4-7, 9-11) ---
+pandas>=2.2               # verified 2.2.3
+numpy>=1.26,<3            # verified 2.1.3
+pyarrow>=14               # parquet for the canonical dataset
+scikit-learn>=1.5         # verified 1.6.1 ; TF-IDF baseline + linear probes
+scipy>=1.13               # significance testing (Phase 14)
+
+# --- Reporting (Phases 13-15) ---
+matplotlib>=3.9
+tqdm>=4.66
+
+# --- Optional, Phase 13 only. Uncomment if UMAP is actually used; PCA is the default. ---
+# umap-learn>=0.5

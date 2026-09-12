@@ -1,74 +1,170 @@
-# C10-Team-Hwange
-# Ubuntu‑Aligned Latent Probing for Toxicity Detection with Gemma 2B
+# Early Detection of Toxic Language through Latent Probing of Large Language Models
 
-This repository contains code and resources for training **latent probes** on the multilingual Ubuntu‑oriented toxicity dataset. The project aligns with Ubuntu ethics by focusing on fairness, inclusivity, and harm‑aware detection across English and Amharic.
+## TRI AI Saturdays — Cohort 10 | Team Hwange
 
----
+### Participants
+- Birhanu Simachew
+- Semere Herruy
+- Gebrhans Weldegebriel
 
-## Dataset
+This project investigates whether toxic language can be detected **before a language model generates its final output** by probing the hidden representations of a modern Large Language Model (LLM).
 
-- **Source**: 4,000‑row synthetic dataset containing paired English and Amharic sentences, annotated for `hate_speech` vs. `safe`.  
-- **Creation**: Each row includes parallel translations. Labels are binary (`1 = hate_speech`, `0 = safe`). Metadata fields (e.g., `ubuntu_harm_type_en`, `severity_en`) describe relational harms such as exclusion, silencing, stereotyping, or threat.  
-- **Selection**: The dataset was designed to reflect Ubuntu principles by capturing harms relevant to community belonging and dignity.  
-- **Preprocessing**:  
-  - Each sentence expanded into two examples (English + Amharic).  
-  - Group IDs ensure translations of the same sentence remain together during splits.  
-  - Grouped train/validation/test split (70/15/15) prevents leakage across languages.
+Rather than relying only on surface-level text classifiers or post-generation moderation, we examine where toxicity-related information becomes linearly accessible inside the model's hidden layers.
 
 ---
 
-## Training Pipeline
+## 1. Problem Statement
 
-1. **Model**: [Gemma 2 2B](https://huggingface.co/google/gemma-2-2b) loaded via Hugging Face Transformers.  
-2. **Embedding Extraction**:  
-   - Mean‑pooled hidden states from each transformer layer.  
-   - Attention mask applied to exclude padding.  
-   - Embeddings saved layer‑wise as `.npy` files.  
-3. **Probe Training**:  
-   - StandardScaler + LogisticRegression pipeline.  
-   - Hyperparameters:  
-     - `max_iter = 2000`  
-     - `class_weight = balanced`  
-     - `random_state = 42`  
-   - Probes trained per layer, evaluated on validation split.  
-   - Best layer selected by F1 score.  
-4. **Final Probe**: Retrained on train+validation sets, evaluated on held‑out test set.  
-5. **Ubuntu Alignment**: Metadata on harm types used for post‑hoc analysis (not fed into probe). This ensures ethical reflection on which harms are easier/harder to detect.
+Toxic and harmful language presents a significant challenge for modern language systems, particularly when models are deployed across multilingual and culturally diverse environments.
+
+Conventional toxicity detection approaches generally operate on the input or generated text itself. This project explores an alternative approach:
+
+> **Can toxicity-related information be detected from the internal hidden representations of an LLM before the model produces its final output?**
+
+We study this question using lightweight linear probes trained on hidden-layer representations extracted from Gemma 3 1B.
+
+The project also investigates whether these representations generalize across languages, including Amharic, and whether toxicity information becomes increasingly linearly accessible at specific model layers.
 
 ---
 
-## Evaluation
+## 2. Research Question
 
-- **Metrics**: Accuracy, Precision, Recall, F1 (binary).  
-- **Baselines**:  
-  - Majority class baseline.  
-  - Direct fine‑tuning of Gemma without probes.  
-- **Verification**:  
-  - Confusion matrices across English and Amharic subsets.  
-  - Harm‑type analysis (e.g., belonging denial vs. stereotyping).  
-  - Layer‑wise probe performance saved in `layer_probe_results.csv`.  
-- **Results**:  
-  - Best layer identified with highest validation F1.  
-  - Final probe tested separately on English and Amharic to confirm cross‑lingual consistency.
+**Where does toxicity information become linearly accessible within a modern Large Language Model?**
+
+We investigate this through:
+
+- Hidden-layer representation extraction
+- Mean and last-token pooling
+- Lightweight linear probes
+- Layer-wise probing
+- Cross-dataset evaluation
+- Cross-language analysis
+- Random-label and random-embedding controls
 
 ---
 
-## Reproduction
+## 3. Model
 
-To reproduce results:
+The primary model used in this project is:
 
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
+**Gemma 3 1B**
 
-# 2. Preprocess dataset
-python preprocess.py
+We extract hidden representations from selected transformer layers and train lightweight classifiers on these representations.
 
-# 3. Extract embeddings
-python extract_embeddings.py
+### Representation configuration
 
-# 4. Train probes
-python train_probe.py
+- Selected layers: 7
+- Hidden representation dimension: 1,152
+- Pooling strategies:
+  - Mean pooling
+  - Last-token pooling
 
-# 5. Evaluate
-python evaluate.py
+The complete embedding matrix for the full dataset was approximately 2.6 GB and is **not included in this repository**.
+
+---
+
+## 4. Datasets
+
+The unified dataset combines four sources:
+
+| Dataset | Samples |
+|---|---:|
+| HateXplain | 19,229 |
+| ToxiGen | 9,900 |
+| Ubuntu Diagnostic | 9,000 |
+| AfriHate | 4,958 |
+| **Total** | **43,087** |
+
+### Languages
+
+- English: 33,629
+- Amharic: 9,458
+
+### Labels
+
+- Toxic / Harmful: 23,737
+- Safe / Non-harmful: 19,350
+
+Ubuntu Diagnostic data is maintained separately as a zero-shot template robustness diagnostic and is not mixed into the standard training split.
+
+---
+
+## 5. Data Splits
+
+The main dataset was divided into:
+
+| Split | Samples |
+|---|---:|
+| Training | 27,639 |
+| Validation | 2,666 |
+| Test | 3,782 |
+| Ubuntu Probe | 9,000 |
+
+Leakage analysis found:
+
+- 0 groups spanning multiple splits
+- 0 identical texts spanning multiple splits
+
+A total of 4,500 exact bilingual pairs were also validated during data quality analysis.
+
+---
+
+## 6. Methodology
+
+The overall pipeline is:
+
+```text
+Raw Datasets
+     │
+     ▼
+Dataset-Specific Loaders
+     │
+     ▼
+Common Schema
+     │
+     ▼
+Unified / Canonical Dataset
+     │
+     ▼
+Train / Validation / Test Splits
+     │
+     ▼
+Gemma 3 1B
+     │
+     ▼
+Hidden-Layer Representations
+     │
+     ├── Mean Pooling
+     └── Last-Token Pooling
+     │
+     ▼
+Linear Probes
+     │
+     ▼
+Layer-Wise Evaluation
+     │
+     ▼
+Toxicity Detection Analysis
+```
+
+## Results
+
+### Where does toxicity information become linearly accessible?
+
+![Toxicity Probe F1 Performance Across Gemma Layers](assets/f1_across_layers.png)
+
+### ROC-AUC Across Layers
+
+![Toxicity Probe ROC-AUC Across Gemma Layers](assets/roc_auc_across_layers.png)
+
+### Performance Across Languages
+
+![Latent Probe Performance by Language](assets/performance_by_language.png)
+
+### Comparison with TF-IDF Baselines
+
+![Latent Probe vs TF-IDF Baselines](assets/probe_vs_tfidf.png)
+
+### Language-Level Diagnostic
+
+![False-Positive Rate by Language](assets/false_positive_rate.png)

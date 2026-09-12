@@ -1,0 +1,34 @@
+# Gemma hidden-state extraction (Phase 8) and probing (Phase 9).
+
+model:
+  # Gemma is gated: accept the licence on the Hub and provide HF_TOKEN.
+  checkpoint: google/gemma-3-1b-pt
+  # bfloat16, NOT float16. Gemma-3 is trained in bfloat16 and its hidden states
+  # exceed the float16 maximum of 65504, which silently becomes inf and then breaks
+  # every downstream probe. bfloat16 has the same width and float32's exponent range.
+  dtype: bfloat16         # float32 on CPU, bfloat16 on GPU
+  max_length: 256         # tokens; covers the corpus with little truncation
+  batch_size: 32
+
+extraction:
+  # Which transformer layers to take. `all` keeps every layer including embeddings.
+  # gemma-3-1b has 26 layers + 1 embedding = 27 extractable (indices 0-26).
+  #
+  # This 7-point sweep spans the full depth and shows the same curve shape as the
+  # full sweep at roughly a fifth of the cost: 1.3 GB and 14 probe fits, versus
+  # 5.0 GB and 54. Set to `all` for the complete sweep once the shape is known.
+  layers: [0, 5, 10, 13, 16, 21, 26]
+  # Both are extracted so Phase 10 can compare them as a pooling control.
+  poolings: [last_token, mean]
+  # float32 on disk: bfloat16 has no numpy equivalent, and float16 would reintroduce
+  # the same overflow when storing. 7 layers x 2 poolings is ~2.6 GB, which is fine.
+  output_dtype: float32
+
+probing:
+  standardize: true       # StandardScaler before LogisticRegression
+  max_iter: 2000
+  class_weight: balanced
+  # Phase 10 controls, all run against the same representations.
+  controls:
+    shuffled_labels: true
+    random_embeddings: true

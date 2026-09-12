@@ -1,0 +1,105 @@
+# Research decisions that Phase 2 identified but did NOT resolve.
+#
+# Every value here is a PROVISIONAL DEFAULT, not a finding. Each is recorded in
+# the canonical dataset's metadata so any result can be traced to the policy that
+# produced it. Changing a value and re-running regenerates everything downstream.
+#
+# See reports/phase2_inspection/SUMMARY.md for the evidence behind each decision.
+
+seed: 42
+
+hatexplain:
+  # Majority vote over 3 annotators. Only 48.9% of posts are unanimous.
+  aggregation: majority
+
+  # RESOLVED by the Data Card (v2, Aug 2026), sections 2 and 5: the binary label is
+  # Toxic / Non-toxic over "hate speech, harassment, abuse, and offensive language".
+  # `offensive` is therefore inside the toxic class, and the distinction is preserved
+  # in `toxicity_type` so ethnic hate stays analysable as its own slice (Data Card 6).
+  #   harmful | safe | exclude
+  offensive_maps_to: harmful
+
+  # RULING NEEDED. The 919 posts with no annotator majority.
+  #   exclude | include_as_harmful | include_as_safe
+  # Default `exclude`: matches the official split, which already omits exactly
+  # these 919 posts. Note this discards the most ambiguous cases by construction.
+  tie_posts: exclude
+
+  # Data Card 5: sub-category tagging, so ethnic hate remains a reportable slice
+  # within the broader toxic class rather than the dataset's sole target.
+  toxicity_type_map:
+    hatespeech: hate_speech
+    offensive: offensive_language
+    normal: none
+
+  use_official_splits: true
+
+toxigen:
+  configs: [annotated]        # `train` excluded: different schema, machine labels
+  binarize_field: toxicity_human
+
+  # RULING NEEDED. `toxicity_human` is a continuous 1-5 mean of 3 annotators.
+  # Default 2.5 follows the published work (> threshold => harmful). ~15% of
+  # ratings fall in 3.0-3.67, so this threshold materially moves class balance.
+  threshold: 2.5
+
+  # Rows with actual_method == 'human' are human-written; is_synthetic is set
+  # per row, never per dataset.
+  mark_synthetic_per_row: true
+
+  # ToxiGen is implicit hate speech targeting identity groups (Data Card 3:
+  # "broader toxic-language coverage").
+  toxicity_type: hate_speech
+
+# Data Card 6 + Impact Card 8.1: ethnic hate speech is a named evaluation slice, and
+# false positives on legitimate ethnic-group discussion are a first-class concern.
+# These target labels define the ethnic/national-origin slice. Listed here rather than
+# hard-coded because the boundary (e.g. religion vs ethnicity) is a judgement call.
+ethnic_targets:
+  [African, Arab, Asian, Caucasian, Hispanic, Indian, Indigenous, Jewish, Refugee, Minority]
+
+ubuntu:
+  # Confirmed by Impact Card 7 ("evaluate synthetic data separately from real data")
+  # and Data Card 10 (predominantly English sources). Ubuntu stays out of training and
+  # serves as the African-context / relational-harm evaluation slice.
+  #
+  # 4,500 rows derive from 33 sentences, each fixing its own label.
+  #   probe_only | training_source
+  # Default `probe_only`: ~33 independent units cannot support train/val/test.
+  # Ubuntu is held out entirely as a diagnostic set and never trained on.
+  role: probe_only
+
+  # UNRESOLVED CONFLICT. Severity vocabularies collide across the two files:
+  # main = zero/low/high (safe=zero), synthetic = low/medium/high (safe=low).
+  # `low` therefore means safe in one file and harmful in the other. Values are
+  # kept verbatim alongside a severity_scheme column; no harmonization applied.
+  harmonize_severity: false
+
+  # UNRESOLVED CONFLICT. 8 of 33 Amharic translations differ between files,
+  # several by second-person grammatical gender. Pending native-speaker review,
+  # both variants are kept and flagged.
+  drop_divergent_translations: false
+
+afrihate:
+  # Access granted 2026-09-09. Reads the machine-wide HuggingFace token cache.
+  enabled: true
+  languages: [amh]           # Amharic; 15 subsets exist, see reports/phase2_inspection
+
+  # AfriHate's own vocabulary is Hate / Abuse / Normal.
+  #
+  # RULING NEEDED (default follows the Data Card). Data Card 2 and 5 define the
+  # toxic class as "hate speech, harassment, abuse, and offensive language", so
+  # `Abuse` maps to toxic -- the same reasoning that puts HateXplain's `offensive`
+  # inside the toxic class. Set Abuse to 0 if you want hate-only.
+  label_map:
+    Hate: 1
+    Abuse: 1
+    Normal: 0
+
+  # Sub-category tagging, so hate and abuse stay separable (Data Card 5).
+  toxicity_type_map:
+    Hate: hate_speech
+    Abuse: abuse
+    Normal: none
+
+  use_official_splits: true
